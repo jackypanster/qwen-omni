@@ -1,6 +1,17 @@
-# Qwen2.5-Omni 文本转语音（TTS）Web Demo
+# Qwen2.5-Omni 文本转语音（TTS）与语音转文本（ASR）Web Demo
 
-本项目基于 Qwen2.5-Omni-7B，提供文本转语音的 Web 演示界面。**推荐使用 [conda](https://docs.conda.io/) 管理 Python 环境**，兼容性更好。uv 方案可作为可选补充。
+本项目基于 Qwen2.5-Omni-7B，提供文本转语音（TTS）和语音转文本（ASR）两大功能，支持 Web 演示界面和 RESTful API。**推荐使用 [conda](https://docs.conda.io/) 管理 Python 环境**，兼容性更好。uv 方案可作为可选补充。
+
+---
+
+## 最新进展与主要功能
+
+- ✅ **文本转语音（TTS）**：输入文本，生成语音文件，支持多发音人。
+- ✅ **语音转文本（ASR）**：输入音频文件，输出转录文本。
+    - 标准ASR：允许模型适度理解和补全，适合通用语音理解。
+    - 纯ASR（/asr_pure）：禁用智能化，最大程度还原原始语音内容，适合金融、法律等场景。
+- ✅ **RESTful API**：已实现 /tts、/asr、/asr_pure 等接口，支持 HTTP 文件上传与文本转写。
+- ✅ **文档与测试用例**：同步完善了 asr_design.md、design_restful_api.md、python_env_management.md 等文档，便于开发、测试和维护。
 
 ---
 
@@ -46,9 +57,25 @@ pip install -r requirements.txt
 
 ## 启动与运行
 
+### 1. 启动 Web 页面（Streamlit）
 ```bash
 streamlit run app_text2audio.py
 ```
+
+### 2. 启动 RESTful API 服务（FastAPI）
+```bash
+uv run uvicorn fastapi_app:app --host 0.0.0.0 --port 8000
+```
+
+---
+
+## RESTful API 典型接口
+
+- **POST /tts**：文本转语音，返回音频文件下载链接
+- **POST /asr**：语音转文本（标准ASR）
+- **POST /asr_pure**：语音转文本（纯ASR，禁用智能化）
+
+详见 asr_design.md、design_restful_api.md
 
 ---
 
@@ -58,6 +85,8 @@ streamlit run app_text2audio.py
 - 若模型文件较大，建议提前下载好并配置好 `main_text2audio.py` 中的模型路径。
 - 如需安装新依赖，优先用 conda 安装，conda 没有的再用 pip。
 - transformers 必须用 Qwen2.5-Omni 官方定制版（pip+git 安装）。
+- curl 上传文件时请用绝对路径，不要用 ~。
+- FastAPI 文件上传需安装 python-multipart。
 
 ---
 
@@ -65,8 +94,12 @@ streamlit run app_text2audio.py
 
 ```
 ├── app_text2audio.py         # Streamlit 前端页面
-├── main_text2audio.py        # 文本转语音核心逻辑
+├── main_text2audio.py        # 文本转语音/语音转文本核心逻辑
+├── fastapi_app.py            # RESTful API 服务
 ├── output/                   # 生成的音频文件目录
+├── asr_design.md             # ASR 设计与接口文档
+├── design_restful_api.md     # RESTful API 设计文档
+├── docs/python_env_management.md # 环境管理对比与经验
 ├── README.md                 # 本说明文档
 └── ...
 ```
@@ -102,6 +135,7 @@ streamlit run app_text2audio.py
 - [Qwen2.5-Omni-7B 官方文档](https://huggingface.co/Qwen/Qwen2.5-Omni-7B)
 - [conda 官方文档](https://docs.conda.io/)
 - [uv 官方文档](https://github.com/astral-sh/uv)
+- asr_design.md、design_restful_api.md、docs/python_env_management.md
 
 ---
 
