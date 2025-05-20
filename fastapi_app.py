@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uuid
 import os
-from main_text2audio import text_to_speech
+from main_text2audio import text_to_speech, audio_to_text
+import shutil
 
 app = FastAPI(title="Qwen2.5-Omni 文本转语音 RESTful API")
 
@@ -35,6 +36,28 @@ async def tts_api(req: TTSRequest):
             "success": False,
             "error": str(e)
         }, status_code=500)
+
+@app.post("/asr")
+async def asr_api(file: UploadFile = File(...)):
+    # 校验文件类型
+    if not file.filename.lower().endswith((".wav", ".mp3", ".m4a", ".flac")):
+        return JSONResponse({"success": False, "error": "仅支持wav/mp3/m4a/flac音频文件"}, status_code=400)
+    # 保存上传的音频到临时文件
+    tmp_path = f"output/asr_{uuid.uuid4().hex}_{file.filename}"
+    try:
+        with open(tmp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        # 调用ASR
+        text = audio_to_text(tmp_path)
+        return JSONResponse({"success": True, "text": text})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
 
 # 健康检查接口
 @app.get("/ping")

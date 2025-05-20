@@ -59,6 +59,47 @@ def text_to_speech(text_input, output_audio_path="output/output.wav", speaker="C
     sf.write(output_audio_path, audio.reshape(-1).cpu().numpy(), samplerate=24000)
     print(f"音频已保存至: {output_audio_path}")
 
+def audio_to_text(audio_path: str) -> str:
+    """
+    语音转文本（ASR），输入音频文件路径，返回转录文本。
+    """
+    model_path = "/home/llm/model/qwen/Omni/"
+    # 加载模型配置
+    config = AutoConfig.from_pretrained(model_path, local_files_only=True)
+    if hasattr(config, 'rope_scaling') and 'mrope_section' in config.rope_scaling:
+        config.rope_scaling.pop('mrope_section')
+    # 加载模型和处理器
+    model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
+        model_path, config=config, torch_dtype="auto", device_map="auto", local_files_only=True
+    )
+    processor = Qwen2_5OmniProcessor.from_pretrained(model_path, local_files_only=True)
+    # 构造多模态输入（audio only）
+    system_prompt = [
+        {"role": "system", "content": [
+            {"type": "text", "text": "你是Qwen，一个由阿里巴巴集团Qwen团队开发的虚拟人。请你将用户上传的音频内容逐字转录为文本，不要润色、改写或补全，只需尽量还原原始语音内容。"}
+        ]}
+    ]
+    conversation = system_prompt + [
+        {"role": "user", "content": [
+            {"type": "audio", "audio": audio_path}
+        ]}
+    ]
+    text = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
+    audios, images, videos = process_mm_info(conversation, use_audio_in_video=False)
+    inputs = processor(
+        text=text, audio=audios, images=images, videos=videos,
+        return_tensors="pt", padding=True, use_audio_in_video=False
+    ).to(model.device, model.dtype)
+    with torch.no_grad():
+        text_ids = model.generate(
+            **inputs,
+            do_sample=False,
+            max_new_tokens=1024,
+            return_audio=False
+        )
+    asr_text = processor.batch_decode(text_ids, skip_special_tokens=True)[0]
+    return asr_text
+
 if __name__ == "__main__":
     # 指定带目录的输出路径（避免根目录问题）
     input_text = "你好，这是修复后的音频生成测试，路径问题已解决。"
