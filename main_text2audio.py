@@ -100,6 +100,48 @@ def audio_to_text(audio_path: str) -> str:
     asr_text = processor.batch_decode(text_ids, skip_special_tokens=True)[0]
     return asr_text
 
+def audio_to_text_pure_asr(audio_path: str) -> str:
+    """
+    只做ASR，禁用智能化，最大程度还原原始语音内容。
+    """
+    model_path = "/home/llm/model/qwen/Omni/"
+    config = AutoConfig.from_pretrained(model_path, local_files_only=True)
+    if hasattr(config, 'rope_scaling') and 'mrope_section' in config.rope_scaling:
+        config.rope_scaling.pop('mrope_section')
+    model = Qwen2_5OmniForConditionalGeneration.from_pretrained(
+        model_path, config=config, torch_dtype="auto", device_map="auto", local_files_only=True
+    )
+    processor = Qwen2_5OmniProcessor.from_pretrained(model_path, local_files_only=True)
+    # 尝试禁用Talker
+    if hasattr(model, "disable_talker"):
+        model.disable_talker()
+    # 构造ASR专用prompt
+    system_prompt = [
+        {"role": "system", "content": [
+            {"type": "text", "text": "你是Qwen，只做语音逐字转录，不要润色、补全或生成任何额外内容。"}
+        ]}
+    ]
+    conversation = system_prompt + [
+        {"role": "user", "content": [
+            {"type": "audio", "audio": audio_path}
+        ]}
+    ]
+    text = processor.apply_chat_template(conversation, add_generation_prompt=True, tokenize=False)
+    audios, images, videos = process_mm_info(conversation, use_audio_in_video=False)
+    inputs = processor(
+        text=text, audio=audios, images=images, videos=videos,
+        return_tensors="pt", padding=True, use_audio_in_video=False
+    ).to(model.device, model.dtype)
+    with torch.no_grad():
+        text_ids = model.generate(
+            **inputs,
+            do_sample=False,
+            max_new_tokens=0,  # 只输出ASR结果
+            return_audio=False
+        )
+    asr_text = processor.batch_decode(text_ids, skip_special_tokens=True)[0]
+    return asr_text
+
 if __name__ == "__main__":
     # 指定带目录的输出路径（避免根目录问题）
     input_text = "你好，这是修复后的音频生成测试，路径问题已解决。"

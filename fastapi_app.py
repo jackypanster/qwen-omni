@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uuid
 import os
-from main_text2audio import text_to_speech, audio_to_text
+from main_text2audio import text_to_speech, audio_to_text, audio_to_text_pure_asr
 import shutil
 
 app = FastAPI(title="Qwen2.5-Omni 文本转语音 RESTful API")
@@ -49,6 +49,27 @@ async def asr_api(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
         # 调用ASR
         text = audio_to_text(tmp_path)
+        return JSONResponse({"success": True, "text": text})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+
+@app.post("/asr_pure")
+async def asr_pure_api(file: UploadFile = File(...)):
+    # 校验文件类型
+    if not file.filename.lower().endswith((".wav", ".mp3", ".m4a", ".flac")):
+        return JSONResponse({"success": False, "error": "仅支持wav/mp3/m4a/flac音频文件"}, status_code=400)
+    tmp_path = f"output/asr_{uuid.uuid4().hex}_{file.filename}"
+    try:
+        with open(tmp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        # 调用只做ASR的转录
+        text = audio_to_text_pure_asr(tmp_path)
         return JSONResponse({"success": True, "text": text})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
